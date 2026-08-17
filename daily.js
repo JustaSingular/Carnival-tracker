@@ -114,16 +114,18 @@ function writeIndex(dir, entry) {
         }
     }
 
-    known[entry.day] = entry;
+    if (entry.day) known[entry.day] = entry;
 
     const days = fs.readdirSync(dir)
-        .map(name => name.match(/^carnival-(\d{4}-\d{2}-\d{2})\.png$/))
+        .map(name => name.match(/^carnival-(\d{4}-\d{2}-\d{2})\.(png|jpg)$/))
         .filter(Boolean)
         .map(match => ({
-            day: match[1],
-            file: match[0],
             caption: '',
-            ...known[match[1]]
+            ...known[match[1]],
+            day: match[1],
+            // Disk wins: the CI run converts the PNG to a JPEG after capture,
+            // so the recorded filename has to follow what survived.
+            file: match[0]
         }))
         .sort((a, b) => b.day.localeCompare(a.day)); // newest first
 
@@ -146,6 +148,15 @@ async function main() {
     const notify = process.argv.includes('--notify');
     const config = dryRun ? {} : loadConfig();
     const day = today();
+
+    // Rebuild index.json from what's on disk, without capturing anything. The
+    // workflow calls this after converting the day's PNG to a JPEG.
+    if (process.argv.includes('--reindex')) {
+        if (!config.saveDir) throw new Error('--reindex needs SAVE_DIR');
+        writeIndex(config.saveDir, {});
+        console.log('Reindexed ' + config.saveDir);
+        return;
+    }
 
     const { outPath, dom } = await takeScreenshot(SHOT);
     const png = fs.readFileSync(outPath);

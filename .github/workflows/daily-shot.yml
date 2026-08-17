@@ -1,6 +1,8 @@
-# Screenshots the countdown once a day and commits the image, which makes it
-# live at ttcarnival.netlify.app/shots/carnival-YYYY-MM-DD.png and adds it to
-# gallery.html. Runs on GitHub's runners, so nothing depends on a PC being on.
+# Screenshots the countdown once a day, commits the image, and posts it to
+# Instagram. Runs on GitHub's runners, so nothing depends on a PC being on.
+#
+# The Instagram step is skipped unless IG_USER_ID and IG_ACCESS_TOKEN are set as
+# repository secrets, so the capture keeps working before Instagram is wired up.
 
 name: Daily shot
 
@@ -22,6 +24,15 @@ jobs:
     permissions:
       contents: write
 
+    env:
+      SITE_URL: https://ttcarnival.netlify.app
+      # Every filename and date in this job is Trinidad's, not the runner's UTC.
+      TZ: America/Port_of_Spain
+      SAVE_DIR: shots
+      # Job level rather than step level: a step's own env is not dependable
+      # inside that same step's `if`, and these gate two steps.
+      IG_USER_ID: ${{ secrets.IG_USER_ID }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -30,14 +41,33 @@ jobs:
           node-version: '22'
 
       - name: Capture
-        env:
-          # The filename is built from the local date, which should be Trinidad's
-          # rather than the runner's UTC.
-          TZ: America/Port_of_Spain
-          SAVE_DIR: shots
         run: node daily.js
 
+      - name: Convert to JPEG
+        run: |
+          set -euo pipefail
+          day=$(date +%F)
+          png="shots/carnival-$day.png"
+
+          if ! command -v magick >/dev/null && ! command -v convert >/dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick
+          fi
+
+          # Instagram rejects PNG containers outright — JPEG is the only format
+          # the publishing API accepts. Keeping only the JPEG also halves what
+          # the repository carries per day.
+          if command -v magick >/dev/null; then
+            magick "$png" -quality 92 "shots/carnival-$day.jpg"
+          else
+            convert "$png" -quality 92 "shots/carnival-$day.jpg"
+          fi
+
+          rm "$png"
+          node daily.js --reindex
+          ls -lh "shots/carnival-$day.jpg"
+
       - name: Commit
+        id: commit
         run: |
           git config user.name  'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -45,7 +75,35 @@ jobs:
           # Nothing to do if the run repeated within the same day.
           if git diff --staged --quiet; then
             echo 'No new shot to commit.'
+            echo 'published=false' >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          git commit -m "Carnival shot for $(TZ=America/Port_of_Spain date +%F)"
+          git commit -m "Carnival shot for $(date +%F)"
           git push
+          echo 'published=true' >> "$GITHUB_OUTPUT"
+
+      # Instagram fetches the image from its URL, so it has to be live first.
+      # Netlify builds on the push above and usually takes under a minute.
+      - name: Wait for Netlify
+        if: steps.commit.outputs.published == 'true' && env.IG_USER_ID != ''
+        run: |
+          set -euo pipefail
+          url="$SITE_URL/shots/carnival-$(date +%F).jpg"
+          for attempt in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$url")
+            if [ "$code" = '200' ]; then
+              echo "Live after $((attempt * 15))s: $url"
+              exit 0
+            fi
+            echo "attempt $attempt: $code"
+            sleep 15
+          done
+          echo "Timed out waiting for $url"
+          exit 1
+
+      - name: Post to Instagram
+        # Only after a fresh commit, so a re-run never double-posts the same day.
+        if: steps.commit.outputs.published == 'true' && env.IG_USER_ID != ''
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+        run: node instagram.js post
