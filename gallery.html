@@ -137,8 +137,12 @@
                 // which matters once the archive is a few hundred days long.
                 img.loading = 'lazy';
                 img.alt = entry.caption || formatDay(entry.day);
-                img.width = 1920;
-                img.height = 1080;
+                // Reserves the right space before the image arrives, so the page
+                // doesn't jump. Older entries predate these being recorded.
+                if (entry.width && entry.height) {
+                    img.width = entry.width;
+                    img.height = entry.height;
+                }
 
                 const caption = document.createElement('figcaption');
                 const count = document.createElement('span');

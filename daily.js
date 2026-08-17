@@ -27,12 +27,13 @@ const { takeScreenshot } = require('./screenshot');
 
 const CONFIG_FILE = path.join(__dirname, 'daily.env');
 
-// flag.mp4 is 1920x1080 and the CSS fits it with object-fit: cover, so any
-// other aspect ratio crops the flag. Matching its 16:9 captures the whole thing;
-// a smaller 16:9 is still uncropped, just lighter to store.
+// 1080x1350 is Instagram's 4:5 portrait, the tallest shape the feed accepts and
+// the one that fills the profile grid without the thumbnail cropping it. The CSS
+// fits flag.mp4 with object-fit: cover, so a 4:5 frame crops the 16:9 flag — the
+// trade taken deliberately for the grid.
 const SHOT = {
-    width: Number(process.env.SHOT_WIDTH) || 1920,
-    height: Number(process.env.SHOT_HEIGHT) || 1080,
+    width: Number(process.env.SHOT_WIDTH) || 1080,
+    height: Number(process.env.SHOT_HEIGHT) || 1350,
     // Scratch, not shots/ — that folder is committed, and a duplicate of the
     // dated file would double what the repo carries every day.
     out: '.cache/latest.png',
@@ -100,18 +101,20 @@ function readCountdown(dom) {
 function writeIndex(dir, entry) {
     const indexPath = path.join(dir, 'index.json');
 
-    let captions = {};
+    // Past days keep whatever size they were captured at, so the gallery can
+    // reserve the right space per image even after SHOT changes.
+    const known = {};
     if (fs.existsSync(indexPath)) {
         try {
             for (const old of JSON.parse(fs.readFileSync(indexPath, 'utf8'))) {
-                captions[old.day] = old.caption;
+                known[old.day] = old;
             }
         } catch {
             // A corrupt index is not worth failing the day's capture over.
         }
     }
 
-    captions[entry.day] = entry.caption;
+    known[entry.day] = entry;
 
     const days = fs.readdirSync(dir)
         .map(name => name.match(/^carnival-(\d{4}-\d{2}-\d{2})\.png$/))
@@ -119,7 +122,8 @@ function writeIndex(dir, entry) {
         .map(match => ({
             day: match[1],
             file: match[0],
-            caption: captions[match[1]] || ''
+            caption: '',
+            ...known[match[1]]
         }))
         .sort((a, b) => b.day.localeCompare(a.day)); // newest first
 
@@ -160,7 +164,7 @@ async function main() {
         const file = 'carnival-' + day + '.png';
         fs.mkdirSync(config.saveDir, { recursive: true });
         fs.writeFileSync(path.join(config.saveDir, file), png);
-        writeIndex(config.saveDir, { day, file, caption });
+        writeIndex(config.saveDir, { day, file, caption, width: SHOT.width, height: SHOT.height });
         console.log('Saved ' + path.join(config.saveDir, file));
     }
 

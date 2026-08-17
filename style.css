@@ -50,6 +50,9 @@ body {
     font-size: clamp(1.1rem, 3vw, 1.75rem);
     text-transform: uppercase;
     letter-spacing: 0.15em;
+    /* letter-spacing also trails the last letter, padding the box on the right
+       and leaving the text visibly left of centre. Reclaim that width. */
+    margin-right: -0.15em;
 }
 
 .countdown-date {
