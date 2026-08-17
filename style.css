@@ -1,0 +1,58 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    min-height: 100vh;
+}
+
+.background-video {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 100%;
+    min-height: 100%;
+    object-fit: cover;
+    z-index: -1;
+}
+
+.background-content{
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2rem;
+    text-align: center;
+    font-family: "Lilita One", sans-serif;
+    color: #fff;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+}
+
+.countdown-title {
+    font-size: clamp(1.5rem, 4vw, 2.5rem);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.countdown-number {
+    font-size: clamp(4rem, 18vw, 12rem);
+    font-weight: 800;
+    line-height: 1;
+}
+
+.countdown-label {
+    font-size: clamp(1.1rem, 3vw, 1.75rem);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+}
+
+.countdown-date {
+    font-size: clamp(0.9rem, 2vw, 1.1rem);
+    opacity: 0.85;
+}
