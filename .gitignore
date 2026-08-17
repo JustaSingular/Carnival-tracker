@@ -1,0 +1,8 @@
+# Holds PUSH_TOKEN. This repo is public — never commit it.
+daily.env
+
+# Working capture, rewritten every run. The dated copies in shots/ are the ones
+# worth keeping.
+.cache/
+
+node_modules/

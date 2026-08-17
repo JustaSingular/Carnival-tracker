@@ -7,11 +7,15 @@
 //
 // Two delivery routes, either or both:
 //
+//   SAVE_DIR        writes carnival-YYYY-MM-DD.png plus an index.json into a
+//                   folder. With SAVE_DIR=shots this is what the GitHub Action
+//                   commits, which is what gallery.html reads.
 //   PUSH_BASE_URL   uploads to the push app's /api/shot, where every day is
 //                   browsable at /shot.html. Silent: nothing is published
 //                   unless --notify is passed.
-//   SAVE_DIR        writes carnival-YYYY-MM-DD.png into a local folder, which
-//                   is only useful if something else is watching it.
+//
+// SHOT_WIDTH / SHOT_HEIGHT override the capture size. Keep them 16:9 — see
+// SHOT below.
 //
 // Config comes from daily.env next to this file (see daily.env.example), or
 // from real environment variables — Task Scheduler makes those awkward to set,
@@ -24,8 +28,16 @@ const { takeScreenshot } = require('./screenshot');
 const CONFIG_FILE = path.join(__dirname, 'daily.env');
 
 // flag.mp4 is 1920x1080 and the CSS fits it with object-fit: cover, so any
-// other aspect ratio crops the flag. Matching it captures the whole thing.
-const SHOT = { width: 1920, height: 1080, out: 'shots/daily.png', wait: 5000 };
+// other aspect ratio crops the flag. Matching its 16:9 captures the whole thing;
+// a smaller 16:9 is still uncropped, just lighter to store.
+const SHOT = {
+    width: Number(process.env.SHOT_WIDTH) || 1920,
+    height: Number(process.env.SHOT_HEIGHT) || 1080,
+    // Scratch, not shots/ — that folder is committed, and a duplicate of the
+    // dated file would double what the repo carries every day.
+    out: '.cache/latest.png',
+    wait: 5000
+};
 
 function loadConfig() {
     const config = {
@@ -52,7 +64,9 @@ function loadConfig() {
     }
 
     return {
-        saveDir: config.SAVE_DIR,
+        // Relative paths resolve against the project, not the caller's cwd —
+        // the scheduled task and the GitHub Action invoke this from elsewhere.
+        saveDir: config.SAVE_DIR ? path.resolve(__dirname, config.SAVE_DIR) : '',
         baseUrl: config.PUSH_BASE_URL.replace(/\/+$/, ''),
         token: config.PUSH_TOKEN
     };
@@ -78,6 +92,38 @@ function readCountdown(dom) {
 
     // "176" + "days till Carnival", or "It's Carnival Monday!" + "Play mas!".
     return [number, label].filter(part => part && part !== '—').join(' ');
+}
+
+// A static site can't list a directory, so the folder carries its own manifest.
+// Rebuilt from what's actually on disk, so deleting old shots is enough to drop
+// them from the gallery.
+function writeIndex(dir, entry) {
+    const indexPath = path.join(dir, 'index.json');
+
+    let captions = {};
+    if (fs.existsSync(indexPath)) {
+        try {
+            for (const old of JSON.parse(fs.readFileSync(indexPath, 'utf8'))) {
+                captions[old.day] = old.caption;
+            }
+        } catch {
+            // A corrupt index is not worth failing the day's capture over.
+        }
+    }
+
+    captions[entry.day] = entry.caption;
+
+    const days = fs.readdirSync(dir)
+        .map(name => name.match(/^carnival-(\d{4}-\d{2}-\d{2})\.png$/))
+        .filter(Boolean)
+        .map(match => ({
+            day: match[1],
+            file: match[0],
+            caption: captions[match[1]] || ''
+        }))
+        .sort((a, b) => b.day.localeCompare(a.day)); // newest first
+
+    fs.writeFileSync(indexPath, JSON.stringify(days, null, 2) + '\n');
 }
 
 async function post(url, options) {
@@ -111,10 +157,11 @@ async function main() {
     if (config.saveDir) {
         // Dated filenames so the folder becomes an archive rather than one file
         // that quietly changes under yesterday's copy.
-        const target = path.join(config.saveDir, 'carnival-' + day + '.png');
+        const file = 'carnival-' + day + '.png';
         fs.mkdirSync(config.saveDir, { recursive: true });
-        fs.writeFileSync(target, png);
-        console.log('Saved ' + target);
+        fs.writeFileSync(path.join(config.saveDir, file), png);
+        writeIndex(config.saveDir, { day, file, caption });
+        console.log('Saved ' + path.join(config.saveDir, file));
     }
 
     if (config.baseUrl) {

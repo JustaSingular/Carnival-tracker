@@ -26,12 +26,17 @@ const MIME_TYPES = {
     '.svg': 'image/svg+xml'
 };
 
+// Linux paths are for the GitHub Actions runner, which has Chrome preinstalled.
 const CHROME_PATHS = [
+    process.env.CHROME_PATH,
     'C:/Program Files/Google/Chrome/Application/chrome.exe',
     'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
     'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-    'C:/Program Files/Microsoft/Edge/Application/msedge.exe'
-];
+    'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium'
+].filter(Boolean);
 
 const DEFAULTS = {
     width: 1440,
@@ -99,6 +104,8 @@ function capture(browser, url, options, outPath) {
         '--disable-gpu',
         '--hide-scrollbars',
         '--autoplay-policy=no-user-gesture-required',
+        // Chrome's sandbox needs kernel privileges a CI container doesn't grant.
+        ...(process.env.CI ? ['--no-sandbox'] : []),
         '--user-data-dir=' + profileDir,
         '--window-size=' + options.width + ',' + options.height,
         '--virtual-time-budget=' + options.wait,

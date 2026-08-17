@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap" rel="stylesheet">
+    <title>Carnival Countdown Archive</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: #101010;
+            color: #fff;
+            font-family: "Lilita One", sans-serif;
+            padding:
+                calc(env(safe-area-inset-top) + 1.75rem)
+                calc(env(safe-area-inset-right) + 1rem)
+                calc(env(safe-area-inset-bottom) + 3rem)
+                calc(env(safe-area-inset-left) + 1rem);
+        }
+
+        header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 1rem;
+            max-width: 900px;
+            margin: 0 auto 1.5rem;
+        }
+
+        h1 {
+            font-size: clamp(1.4rem, 5vw, 2rem);
+            font-weight: 400;
+            letter-spacing: 0.02em;
+        }
+
+        a.home {
+            color: rgba(255, 255, 255, 0.6);
+            text-decoration: none;
+            font-size: 0.95rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .shots {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        figure {
+            /* No overflow:hidden or transform — either can stop iOS offering
+               "Save to Photos" on a long press. */
+            border-radius: 14px;
+        }
+
+        img {
+            display: block;
+            width: 100%;
+            height: auto;
+            border-radius: 14px;
+            background: #1c1c1c;
+        }
+
+        figcaption {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            /* Wraps rather than overflowing: the two halves together are wider
+               than a phone once the date spells out the year. */
+            flex-wrap: wrap;
+            gap: 0.15rem 1rem;
+            padding: 0.6rem 0.2rem 0;
+            font-size: 0.85rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.55);
+        }
+
+        .status {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.95rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 4rem 1rem;
+        }
+
+        .hint {
+            max-width: 900px;
+            margin: 0 auto 1.75rem;
+            font-size: 0.85rem;
+            letter-spacing: 0.06em;
+            color: rgba(255, 255, 255, 0.4);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Countdown Archive</h1>
+        <a class="home" href="/">Today ›</a>
+    </header>
+
+    <p class="hint">Press and hold an image to save it.</p>
+
+    <div class="shots" id="shots"></div>
+    <p class="status" id="status">Loading…</p>
+
+    <script>
+        const shotsEl = document.getElementById('shots');
+        const statusEl = document.getElementById('status');
+
+        function formatDay(day) {
+            const date = new Date(day + 'T00:00:00');
+            return date.toLocaleDateString('en-TT', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+        }
+
+        function render(days) {
+            for (const entry of days) {
+                const figure = document.createElement('figure');
+
+                const img = document.createElement('img');
+                img.src = 'shots/' + entry.file;
+                // Everything below the first screen loads only when scrolled to,
+                // which matters once the archive is a few hundred days long.
+                img.loading = 'lazy';
+                img.alt = entry.caption || formatDay(entry.day);
+                img.width = 1920;
+                img.height = 1080;
+
+                const caption = document.createElement('figcaption');
+                const count = document.createElement('span');
+                count.textContent = entry.caption;
+                const when = document.createElement('span');
+                when.textContent = formatDay(entry.day);
+
+                caption.append(count, when);
+                figure.append(img, caption);
+                shotsEl.append(figure);
+            }
+        }
+
+        // index.json is rebuilt by daily.js each time a shot is saved; a static
+        // host can't list the folder for us.
+        fetch('shots/index.json', { cache: 'no-store' })
+            .then(response => response.ok ? response.json() : Promise.reject(response.status))
+            .then(days => {
+                if (!days.length) {
+                    statusEl.textContent = 'No shots yet';
+                    return;
+                }
+                render(days);
+                statusEl.remove();
+            })
+            .catch(() => {
+                statusEl.textContent = 'No shots yet';
+            });
+    </script>
+
+</body>
+</html>

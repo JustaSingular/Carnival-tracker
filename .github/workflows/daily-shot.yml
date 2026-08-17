@@ -1,0 +1,51 @@
+# Screenshots the countdown once a day and commits the image, which makes it
+# live at ttcarnival.netlify.app/shots/carnival-YYYY-MM-DD.png and adds it to
+# gallery.html. Runs on GitHub's runners, so nothing depends on a PC being on.
+
+name: Daily shot
+
+on:
+  schedule:
+    # 12:00 UTC = 08:00 in Trinidad (AST, no daylight saving). GitHub queues
+    # cron jobs under load, so the real run time drifts a few minutes later.
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+
+# Prevents a manual run and the nightly cron from pushing over each other.
+concurrency:
+  group: daily-shot
+  cancel-in-progress: false
+
+jobs:
+  shot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Capture
+        env:
+          # The filename is built from the local date, which should be Trinidad's
+          # rather than the runner's UTC.
+          TZ: America/Port_of_Spain
+          SAVE_DIR: shots
+        run: node daily.js
+
+      - name: Commit
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add shots/
+          # Nothing to do if the run repeated within the same day.
+          if git diff --staged --quiet; then
+            echo 'No new shot to commit.'
+            exit 0
+          fi
+          git commit -m "Carnival shot for $(TZ=America/Port_of_Spain date +%F)"
+          git push
